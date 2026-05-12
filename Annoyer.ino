@@ -46,6 +46,7 @@
 #include <ArduinoLowPower.h>
 #include <RTCZero.h>
 #include <FlashStorage.h>
+#include <Adafruit_DotStar.h>
 
 
 // ===== Pins =====
@@ -123,6 +124,9 @@ FlashStorage(volStore, uint8_t);
 uint8_t volNow = DEFAULT_VOL;
 volatile bool wakeFlag = false;
 
+// Onboard DotStar RGB LED. We turn it off in setup() to save ~1 mA.
+Adafruit_DotStar dotstar(1, PIN_DOTSTAR_DATA, PIN_DOTSTAR_CLK, DOTSTAR_BRG);
+
 // Cached folder file counts, indexed by folder number. Populated once at boot
 // while the system is quiet — runtime queries get scrambled by interleaved
 // play-finish events from the DFPlayer.
@@ -136,6 +140,12 @@ enum Button { BTN_NONE, BTN_PLAY, BTN_NEXT, BTN_BOTH };
 // ===========================================================================
 
 void setup() {
+  // Turn off the onboard DotStar — it's on at full brightness by default
+  // when the sketch starts, drawing ~1 mA forever.
+  dotstar.begin();
+  dotstar.clear();
+  dotstar.show();
+
   pinMode(PIN_BTN_PLAY,  INPUT);
   pinMode(PIN_BTN_NEXT,  INPUT);
   pinMode(PIN_MP3_POWER, OUTPUT);
@@ -646,12 +656,20 @@ void runAnnoyer(uint8_t sound, uint32_t intervalMs) {
 void sleepForInterval(uint32_t intervalMs) {
   uint32_t remaining = intervalMs;
   wakeFlag = false;
+
+  // Disable USB pullup before standby — saves hundreds of uA.
+  // Re-enabled on wake so Serial Monitor still works during the awake window.
+  USBDevice.detach();
+
   while (remaining > 0) {
     uint32_t chunk = remaining > SLEEP_CHUNK_MS ? SLEEP_CHUNK_MS : remaining;
     LowPower.deepSleep(chunk);
-    if (wakeFlag) { wakeFlag = false; return; }
+    if (wakeFlag) break;
     remaining -= chunk;
   }
+
+  USBDevice.attach();
+  wakeFlag = false;
 }
 
 
@@ -661,6 +679,8 @@ void sleepForInterval(uint32_t intervalMs) {
 // ===========================================================================
 
 void sleepForever() {
+  // Terminal sleep — drop USB permanently to minimize power until power-cycle.
+  USBDevice.detach();
   LowPower.attachInterruptWakeup(PIN_BTN_NEXT, wakeISR, RISING);
   while (true) {
     LowPower.deepSleep(SLEEP_CHUNK_MS);
