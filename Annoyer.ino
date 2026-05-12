@@ -124,8 +124,28 @@ FlashStorage(volStore, uint8_t);
 uint8_t volNow = DEFAULT_VOL;
 volatile bool wakeFlag = false;
 
-// Onboard DotStar RGB LED. We turn it off in setup() to save ~1 mA.
+// Onboard DotStar RGB LED. Used as a power-on indicator and for button-press
+// feedback. Disabled entirely once we enter an Annoyer mode (battery first).
 Adafruit_DotStar dotstar(1, PIN_DOTSTAR_DATA, PIN_DOTSTAR_CLK, DOTSTAR_BRG);
+bool ledEnabled = true;
+
+void setDotStar(uint8_t r, uint8_t g, uint8_t b) {
+  dotstar.setPixelColor(0, r, g, b);
+  dotstar.show();
+}
+
+void clearDotStar() {
+  dotstar.clear();
+  dotstar.show();
+}
+
+// Brief blink to confirm a button press. No-op when ledEnabled is false.
+void flashDotStar() {
+  if (!ledEnabled) return;
+  setDotStar(0, 80, 0);   // green
+  delay(40);
+  clearDotStar();
+}
 
 // Cached folder file counts, indexed by folder number. Populated once at boot
 // while the system is quiet — runtime queries get scrambled by interleaved
@@ -140,11 +160,12 @@ enum Button { BTN_NONE, BTN_PLAY, BTN_NEXT, BTN_BOTH };
 // ===========================================================================
 
 void setup() {
-  // Turn off the onboard DotStar — it's on at full brightness by default
-  // when the sketch starts, drawing ~1 mA forever.
+  // Light the DotStar green for 5 seconds at boot so the user knows the
+  // device is on. Setup work (MP3 player init, folder count caching) takes
+  // a few seconds already; we pad to a guaranteed 5 s total.
   dotstar.begin();
-  dotstar.clear();
-  dotstar.show();
+  setDotStar(0, 80, 0);
+  unsigned long bootStart = millis();
 
   pinMode(PIN_BTN_PLAY,  INPUT);
   pinMode(PIN_BTN_NEXT,  INPUT);
@@ -153,6 +174,13 @@ void setup() {
 
   loadVolume();
   mp3PowerOn();
+
+  // Ensure boot LED is visible for at least 5 seconds total
+  while (millis() - bootStart < 5000) {
+    delay(10);
+  }
+  clearDotStar();
+
   runMenu();
 }
 
@@ -326,6 +354,10 @@ Button pollButtons() {
   p = digitalRead(PIN_BTN_PLAY) == HIGH;
   n = digitalRead(PIN_BTN_NEXT) == HIGH;
   if (!p && !n) return BTN_NONE;
+
+  // Visual feedback: flash the DotStar immediately on confirmed press
+  // (skipped in Annoyer modes where ledEnabled is false).
+  flashDotStar();
 
   // Both-press detection: only commits to BTN_BOTH if BOTH pins are HIGH
   // continuously for BOTH_HOLD_MS. Single momentary flickers on the other
@@ -623,6 +655,12 @@ void wakeISR() { wakeFlag = true; }
 void runAnnoyer(uint8_t sound, uint32_t intervalMs) {
   LowPower.attachInterruptWakeup(PIN_BTN_NEXT, wakeISR, RISING);
   randomSeed(millis());   // seeded from how long they took to navigate the menus
+
+  // Annoyer mode: disable the DotStar entirely. The device is asleep most
+  // of the time, and any LED activity (even brief flashes on button wake)
+  // chews into battery life. User explicitly wants this off here.
+  ledEnabled = false;
+  clearDotStar();
 
   while (true) {
     mp3PowerOff();
