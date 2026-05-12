@@ -59,9 +59,11 @@ gen() {
     return 1
   fi
 
-  # 25 ms fade-in to suppress any startup click from the MP3 encoder
+  # 25 ms fade-in to suppress startup click, plus 300 ms trailing silence
+  # so the DFPlayer's PlayFinished event fires before the spoken audio
+  # actually ends (otherwise the next play command cuts the tail off).
   ffmpeg -y -loglevel error -i "$tmp" \
-    -af "afade=t=in:st=0:d=0.025" \
+    -af "afade=t=in:st=0:d=0.025,apad=pad_dur=0.3" \
     -codec:a libmp3lame -b:a 128k "$OUTDIR/$fname"
   rm -f "$tmp"
   echo "ok ($(stat -f%z "$OUTDIR/$fname") bytes)"
