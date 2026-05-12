@@ -1,0 +1,16 @@
+# macOS
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+.fseventsd
+
+# Local user content sounds (kids add their own to /02/, /03/, /07/)
+# The system narration in /01/ is committed so the device works out of the box.
+sounds/02/*.mp3
+sounds/03/*.mp3
+sounds/07/*.mp3
+
+# API keys / local secrets — never commit these
+.elevenlabs_key*
+*.key
