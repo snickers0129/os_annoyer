@@ -119,6 +119,14 @@ const uint8_t DEFAULT_VOL = 22;
 
 
 // ===== Globals =====
+
+// NOTE: this enum must be declared BEFORE the first function definition in
+// the file. Arduino IDE auto-generates function prototypes and inserts them
+// right above the first function it sees — if Button is declared after
+// those helpers, the prototypes for pollButtons()/waitForButton() reference
+// an undeclared type and the sketch won't compile.
+enum Button { BTN_NONE, BTN_PLAY, BTN_NEXT, BTN_BOTH };
+
 DFRobotDFPlayerMini mp3;
 FlashStorage(volStore, uint8_t);
 uint8_t volNow = DEFAULT_VOL;
@@ -151,8 +159,6 @@ void flashDotStar() {
 // while the system is quiet — runtime queries get scrambled by interleaved
 // play-finish events from the DFPlayer.
 int folderFileCount[8] = {0};
-
-enum Button { BTN_NONE, BTN_PLAY, BTN_NEXT, BTN_BOTH };
 
 
 // ===========================================================================
