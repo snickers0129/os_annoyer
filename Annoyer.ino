@@ -317,13 +317,23 @@ Button pollButtons() {
   n = digitalRead(PIN_BTN_NEXT) == HIGH;
   if (!p && !n) return BTN_NONE;
 
-  // Give the second button a brief window to come in, so simultaneous-ish
-  // presses are recognized as BTN_BOTH instead of one then the other.
+  // Both-press detection: only commits to BTN_BOTH if BOTH pins are HIGH
+  // continuously for BOTH_HOLD_MS. Single momentary flickers on the other
+  // pin (electrical coupling between traces, finger brushes) do NOT count.
+  const uint32_t BOTH_HOLD_MS = 50;
+  unsigned long bothHighSince = 0;
   unsigned long t0 = millis();
   while (millis() - t0 < BOTH_WINDOW_MS) {
-    if (digitalRead(PIN_BTN_PLAY) == HIGH && digitalRead(PIN_BTN_NEXT) == HIGH) {
-      p = n = true;
-      break;
+    bool pp = digitalRead(PIN_BTN_PLAY) == HIGH;
+    bool nn = digitalRead(PIN_BTN_NEXT) == HIGH;
+    if (pp && nn) {
+      if (bothHighSince == 0) bothHighSince = millis();
+      if (millis() - bothHighSince >= BOTH_HOLD_MS) {
+        p = n = true;   // confirmed both-press
+        break;
+      }
+    } else {
+      bothHighSince = 0;  // reset the streak
     }
     delay(5);
   }
